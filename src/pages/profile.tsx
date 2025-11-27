@@ -5,7 +5,7 @@ import MainLayout from '@/components/Layout/MainLayout';
 import { useAuth } from '@/hooks/useAuth';
 import Image from 'next/image';
 import { useRouter } from 'next/router';
-// import { uploadFile } from '@/lib/storage'; // TIDAK DIGUNAKAN UNTUK SEMENTARA
+import { storage } from '@/lib/storageAdapter';
 
 const ProfilePage: React.FC = () => {
   const { user, loading: authLoading, logout, updateUserProfile } = useAuth();
