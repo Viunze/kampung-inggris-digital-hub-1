@@ -1,11 +1,12 @@
+// src/pages/angkringan.tsx
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '@/hooks/useAuth';
-import { useForumPosts } from '@/hooks/useForumPosts'; // Asumsi hook ini ada
-import { addDocument } from '@/lib/firebase'; // Asumsi fungsi ini ada
-import { ForumPost } from '@/types/forum'; // Asumsi interface ini ada
-
-// Anggap interface ForumPost memiliki id: string | FieldValue
+import { useForumPosts } from '@/hooks/useForumPosts';
+import { addDocument } from '@/lib/firebase';
+import { ForumPost } from '@/types/forum'; 
+import { Timestamp } from 'firebase/firestore'; // Import Timestamp untuk konsistensi
 
 const Angkringan = () => {
   const router = useRouter();
@@ -28,7 +29,10 @@ const Angkringan = () => {
     setIsSubmitting(true);
 
     try {
-      const newPost: Omit<ForumPost, 'id' | 'timestamp'> = {
+      // Omit 'id' dan 'timestamp' karena Firestore yang akan mengaturnya
+      type NewPostData = Omit<ForumPost, 'id' | 'timestamp'>;
+
+      const newPost: NewPostData = {
         content: newPostContent.trim(),
         authorId: user.uid,
         authorName: user.displayName || 'Anonim',
@@ -36,22 +40,17 @@ const Angkringan = () => {
         likesCount: 0,
         likedBy: [],
         repliesCount: 0,
-        // ID dan Timestamp akan ditambahkan oleh Firestore/fungsi addDocument
       };
 
-      // ✅ PERBAIKAN: Menggunakan Omit<ForumPost, 'id'>
-      // Ini memberi tahu TypeScript bahwa kita mengirim ForumPost TANPA properti 'id'.
-      // Ini memperbaiki Type error: Property 'id' is missing
+      // Menggunakan Omit<ForumPost, 'id'> dan menambahkan Timestamp di sini
       await addDocument<Omit<ForumPost, 'id'>>('forumPosts', {
         ...newPost,
-        timestamp: new Date(), // Menggunakan Date object, bukan 'as any'
+        timestamp: Timestamp.fromDate(new Date()), // Menggunakan Timestamp Firestore
       });
 
       setNewPostContent('');
-      // Anda mungkin perlu me-refresh posts di hook useForumPosts
     } catch (err: any) {
       console.error("Error adding forum post:", err);
-      // Di sini kita bisa menambahkan notifikasi error ke user
     } finally {
       setIsSubmitting(false);
     }
@@ -117,7 +116,8 @@ const Angkringan = () => {
                 <div>
                   <p className="font-semibold">{post.authorName}</p>
                   <p className="text-xs text-gray-500">
-                    {post.timestamp ? new Date(post.timestamp).toLocaleString() : 'Baru saja'}
+                    {/* Konversi Firestore Timestamp ke string untuk ditampilkan */}
+                    {post.timestamp ? post.timestamp.toDate().toLocaleString() : 'Baru saja'}
                   </p>
                 </div>
               </div>
