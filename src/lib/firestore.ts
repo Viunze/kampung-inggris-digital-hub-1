@@ -17,6 +17,9 @@ import {
   startAfter,
   DocumentData,
   QueryDocumentSnapshot,
+  DocumentReference, // Tambahkan ini
+  UpdateData,       // Tambahkan ini
+  WithFieldValue    // Tambahkan ini (jika belum ada)
 } from 'firebase/firestore';
 
 // Konfigurasi Firebase Anda (pastikan ini diatur dengan benar, mungkin dari file .env atau config)
@@ -51,8 +54,6 @@ export async function getDocument<T extends DocumentData>(
 
   if (docSnap.exists()) {
     // Memastikan id dokumen disertakan dalam data
-    // Menggunakan double assertion (as unknown as T & { id: string })
-    // atau hanya assertion langsung ke tipe yang lebih spesifik
     return { ...docSnap.data(), id: docSnap.id } as T & { id: string };
   } else {
     return null;
@@ -79,7 +80,7 @@ export async function getCollection<T extends DocumentData>(
  */
 export async function addDocument<T extends DocumentData>(
   collectionName: string,
-  data: T
+  data: WithFieldValue<T> // Gunakan WithFieldValue untuk tipe data yang akan ditambahkan
 ): Promise<string> {
   const docRef = await addDoc(collection(db, collectionName), data);
   return docRef.id;
@@ -94,9 +95,14 @@ export async function addDocument<T extends DocumentData>(
 export async function updateDocument<T extends DocumentData>(
   collectionName: string,
   id: string,
-  data: Partial<T>
+  data: UpdateData<T> // Menggunakan UpdateData<T> agar tipe yang diupdate lebih spesifik
 ): Promise<void> {
-  const docRef = doc(db, collectionName, id);
+  // Buat referensi koleksi yang type-aware terlebih dahulu
+  const colRef = collection(db, collectionName);
+  // Kemudian buat referensi dokumen dari koleksi yang type-aware,
+  // dan cast secara eksplisit ke DocumentReference dengan tipe T.
+  const docRef = doc(colRef, id) as DocumentReference<T>;
+
   await updateDoc(docRef, data);
 }
 
