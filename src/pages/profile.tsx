@@ -1,32 +1,43 @@
-// src/pages/profile.tsx
+// src/pages/profile.tsx (Revisi Total)
 
 import React, { useState, useEffect, useRef } from 'react';
 import MainLayout from '@/components/Layout/MainLayout';
 import { useAuth } from '@/hooks/useAuth';
 import Image from 'next/image';
 import { useRouter } from 'next/router';
-import { uploadFile } from '@/lib/storage'; // Impor fungsi uploadFile
+// import { uploadFile } from '@/lib/storage'; // TIDAK DIGUNAKAN UNTUK SEMENTARA
 
 const ProfilePage: React.FC = () => {
   const { user, loading: authLoading, logout, updateUserProfile } = useAuth();
   const router = useRouter();
 
   const [displayName, setDisplayName] = useState(user?.displayName || '');
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  // const [photoFile, setPhotoFile] = useState<File | null>(null); // TIDAK DIGUNAKAN
   const [photoPreview, setPhotoPreview] = useState<string | null>(user?.photoURL || null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null); // Ref untuk input file
+  // const fileInputRef = useRef<HTMLInputElement>(null); // TIDAK DIGUNAKAN
 
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/auth/login'); // Redirect jika belum login
     } else if (user) {
       setDisplayName(user.displayName || '');
-      setPhotoPreview(user.photoURL || null);
+      // Jika user tidak punya photoURL, coba generate Gravatar
+      if (!user.photoURL && user.email) {
+        setPhotoPreview(`https://www.gravatar.com/avatar/${md5(user.email.trim().toLowerCase())}?d=identicon&s=128`);
+      } else {
+        setPhotoPreview(user.photoURL);
+      }
     }
   }, [user, authLoading, router]);
 
+  // Fungsi MD5 sederhana untuk Gravatar. Di produksi, gunakan library yang lebih aman.
+  const md5 = (s: string) => {
+    return require('crypto').createHash('md5').update(s).digest('hex');
+  };
+
+  /* // Fungsionalitas upload file ke Storage (dinonaktifkan)
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -34,6 +45,7 @@ const ProfilePage: React.FC = () => {
       setPhotoPreview(URL.createObjectURL(file)); // Buat preview gambar
     }
   };
+  */
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,16 +53,22 @@ const ProfilePage: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      let newPhotoURL = user?.photoURL || undefined;
+      // let newPhotoURL = user?.photoURL || undefined; // TIDAK DIGUNAKAN
 
+      /* // Logika upload gambar (dinonaktifkan)
       if (photoFile) {
         // Upload gambar baru jika ada
-        newPhotoURL = await uploadFile(photoFile, `profile_pictures/${user?.uid}/`);
+        // newPhotoURL = await uploadFile(photoFile, `profile_pictures/${user?.uid}/`);
+        alert('Fitur upload gambar saat ini dinonaktifkan karena Firebase Storage belum diaktifkan.');
+        setIsSubmitting(false);
+        return;
       }
+      */
 
-      // Hanya update jika ada perubahan
-      if (displayName !== user?.displayName || newPhotoURL !== user?.photoURL) {
-        await updateUserProfile(displayName, newPhotoURL);
+      // Hanya update jika ada perubahan display name
+      if (displayName !== user?.displayName) {
+        await updateUserProfile(displayName, user?.photoURL || undefined); // photoURL tidak diubah dari sini
+        alert('Nama profil berhasil diperbarui!');
       } else {
         alert('Tidak ada perubahan yang dilakukan.');
       }
@@ -98,12 +116,18 @@ const ProfilePage: React.FC = () => {
                 </svg>
               )}
             </div>
+            <p className="mt-4 text-sm text-gray-600">
+              Foto profil akan diambil dari <a href="https://gravatar.com" target="_blank" rel="noopener noreferrer" className="text-java-green-dark hover:underline">Gravatar</a> jika tersedia, atau placeholder.
+            </p>
+            {/* Tombol 'Ubah Foto' dinonaktifkan */}
+            {/*
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="mt-4 px-4 py-2 bg-java-orange text-white rounded-lg hover:bg-java-gold transition-colors text-sm font-semibold"
+              onClick={() => { alert('Fitur upload gambar dinonaktifkan.'); fileInputRef.current?.click(); }}
+              className="mt-4 px-4 py-2 bg-java-orange text-white rounded-lg hover:bg-java-gold transition-colors text-sm font-semibold opacity-50 cursor-not-allowed"
+              disabled
             >
-              Ubah Foto
+              Ubah Foto (Dinonaktifkan)
             </button>
             <input
               type="file"
@@ -111,7 +135,9 @@ const ProfilePage: React.FC = () => {
               className="hidden"
               accept="image/*"
               onChange={handleFileChange}
+              disabled // Dinonaktifkan
             />
+            */}
           </div>
 
           {/* Nama Tampilan */}
@@ -148,7 +174,7 @@ const ProfilePage: React.FC = () => {
           <button
             type="submit"
             className="w-full bg-java-green-dark text-white py-2 rounded-lg font-semibold hover:bg-java-green-light transition-colors duration-300"
-            disabled={isSubmitting}
+            disabled={isSubmitting || displayName === user?.displayName}
           >
             {isSubmitting ? 'Menyimpan...' : 'Simpan Perubahan'}
           </button>
