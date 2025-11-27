@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "site": "kampunginggrisdigitalhub",
+    "site": "kampunginggrisdigitalhub2-v2",
     "public": "public",
     "ignore": [
       "firebase.json",
