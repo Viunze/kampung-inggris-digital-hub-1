@@ -1,94 +1,167 @@
 // src/lib/firestore.ts
 
-import { db } from './firebase';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
+  getFirestore,
   collection,
   doc,
   getDoc,
   getDocs,
   addDoc,
-  updateDoc, // Pastikan ini diimpor
+  updateDoc,
   deleteDoc,
   query,
-  QueryConstraint,
-  serverTimestamp, // Untuk otomatis mengisi timestamp
+  where,
+  limit,
+  orderBy,
+  startAfter,
   DocumentData,
+  QueryDocumentSnapshot,
 } from 'firebase/firestore';
 
+// Konfigurasi Firebase Anda (pastikan ini diatur dengan benar, mungkin dari file .env atau config)
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+};
+
+// Inisialisasi Firebase App
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+export const db = getFirestore(app);
+
+// --- CRUD Functions ---
+
 /**
- * Mengambil dokumen tunggal berdasarkan ID dari koleksi tertentu.
+ * Mendapatkan satu dokumen dari koleksi berdasarkan ID.
  * @param collectionName Nama koleksi.
  * @param id ID dokumen.
- * @returns Data dokumen atau null jika tidak ditemukan.
+ * @returns Dokumen dengan ID-nya, atau null jika tidak ditemukan.
  */
-export const getDocById = async <T extends DocumentData>(collectionName: string, id: string): Promise<T | null> => {
+export async function getDocument<T extends DocumentData>(
+  collectionName: string,
+  id: string
+): Promise<(T & { id: string }) | null> {
   const docRef = doc(db, collectionName, id);
   const docSnap = await getDoc(docRef);
 
   if (docSnap.exists()) {
     // Memastikan id dokumen disertakan dalam data
-    return { ...docSnap.data(), id: docSnap.id } as T;
+    // Menggunakan double assertion (as unknown as T & { id: string })
+    // atau hanya assertion langsung ke tipe yang lebih spesifik
+    return { ...docSnap.data(), id: docSnap.id } as T & { id: string };
   } else {
     return null;
   }
-};
+}
 
 /**
- * Mengambil semua dokumen atau dokumen yang difilter dari koleksi tertentu.
+ * Mendapatkan semua dokumen dari koleksi.
  * @param collectionName Nama koleksi.
- * @param queryConstraints Array of QueryConstraint untuk filter, orderBy, limit.
- * @returns Array of dokumen.
+ * @returns Array dokumen, masing-masing dengan ID-nya.
  */
-export const getDocsByQuery = async <T extends DocumentData>(
-  collectionName: string,
-  queryConstraints: QueryConstraint[] = []
-): Promise<T[]> => {
-  const colRef = collection(db, collectionName);
-  const q = query(colRef, ...queryConstraints);
-  const querySnapshot = await getDocs(q);
-
-  const data: T[] = [];
-  querySnapshot.forEach((doc) => {
-    data.push({ ...doc.data(), id: doc.id } as T);
-  });
-  return data;
-};
+export async function getCollection<T extends DocumentData>(
+  collectionName: string
+): Promise<(T & { id: string })[]> {
+  const querySnapshot = await getDocs(collection(db, collectionName));
+  return querySnapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id } as T & { id: string }));
+}
 
 /**
  * Menambahkan dokumen baru ke koleksi.
- * Otomatis menambahkan `createdAt` dan `updatedAt` dengan `serverTimestamp()`.
  * @param collectionName Nama koleksi.
- * @param data Data dokumen yang akan ditambahkan (tanpa ID).
- * @returns ID dokumen yang baru dibuat.
+ * @param data Data dokumen yang akan ditambahkan.
+ * @returns ID dokumen baru yang dibuat.
  */
-export const addDocument = async <T extends DocumentData>(collectionName: string, data: Omit<T, 'id'>): Promise<string> => {
-  const colRef = collection(db, collectionName);
-  const docRef = await addDoc(colRef, {
-    ...data,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
+export async function addDocument<T extends DocumentData>(
+  collectionName: string,
+  data: T
+): Promise<string> {
+  const docRef = await addDoc(collection(db, collectionName), data);
   return docRef.id;
-};
+}
 
 /**
  * Memperbarui dokumen yang sudah ada.
- * Otomatis memperbarui `updatedAt` dengan `serverTimestamp()`.
  * @param collectionName Nama koleksi.
  * @param id ID dokumen yang akan diperbarui.
- * @param data Data sebagian dokumen yang akan diperbarui.
+ * @param data Data yang akan diperbarui.
  */
-export const updateDocument = async <T extends DocumentData>(collectionName: string, id: string, data: Partial<T>): Promise<void> => {
+export async function updateDocument<T extends DocumentData>(
+  collectionName: string,
+  id: string,
+  data: Partial<T>
+): Promise<void> {
   const docRef = doc(db, collectionName, id);
-  await updateDoc(docRef, { ...data, updatedAt: serverTimestamp() });
-};
+  await updateDoc(docRef, data);
+}
 
 /**
  * Menghapus dokumen dari koleksi.
  * @param collectionName Nama koleksi.
  * @param id ID dokumen yang akan dihapus.
  */
-export const deleteDocument = async (collectionName: string, id: string): Promise<void> => {
+export async function deleteDocument(collectionName: string, id: string): Promise<void> {
   const docRef = doc(db, collectionName, id);
   await deleteDoc(docRef);
-};
+}
+
+// --- Query Functions (Contoh, bisa dikembangkan) ---
+
+/**
+ * Mencari dokumen di koleksi dengan kondisi tertentu.
+ * @param collectionName Nama koleksi.
+ * @param field Bidang untuk dikueri.
+ * @param operator Operator perbandingan (misalnya "==").
+ * @param value Nilai untuk dibandingkan.
+ * @returns Array dokumen yang cocok dengan ID-nya.
+ */
+export async function queryDocuments<T extends DocumentData>(
+  collectionName: string,
+  field: string,
+  operator: '==' | '<' | '<=' | '>' | '>=' | 'array-contains' | 'array-contains-any' | 'in' | 'not-in', // Contoh operator
+  value: any
+): Promise<(T & { id: string })[]> {
+  const q = query(collection(db, collectionName), where(field, operator, value));
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id } as T & { id: string }));
+}
+
+/**
+ * Mendapatkan dokumen dengan paginasi.
+ * @param collectionName Nama koleksi.
+ * @param limitCount Jumlah dokumen per halaman.
+ * @param lastDocSnapshot Snapshot dokumen terakhir dari halaman sebelumnya.
+ * @returns Objek berisi array dokumen dan snapshot dokumen terakhir.
+ */
+export async function getPaginatedDocuments<T extends DocumentData>(
+  collectionName: string,
+  limitCount: number,
+  lastDocSnapshot?: QueryDocumentSnapshot | null
+): Promise<{ documents: (T & { id: string })[]; lastVisible: QueryDocumentSnapshot | null }> {
+  let q;
+  if (lastDocSnapshot) {
+    q = query(
+      collection(db, collectionName),
+      orderBy('createdAt', 'desc'), // Pastikan ada bidang 'createdAt' atau sesuaikan
+      startAfter(lastDocSnapshot),
+      limit(limitCount)
+    );
+  } else {
+    q = query(
+      collection(db, collectionName),
+      orderBy('createdAt', 'desc'), // Pastikan ada bidang 'createdAt' atau sesuaikan
+      limit(limitCount)
+    );
+  }
+
+  const querySnapshot = await getDocs(q);
+  const documents = querySnapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id } as T & { id: string }));
+  const lastVisible = querySnapshot.docs[querySnapshot.docs.length - 1] || null;
+
+  return { documents, lastVisible };
+}
