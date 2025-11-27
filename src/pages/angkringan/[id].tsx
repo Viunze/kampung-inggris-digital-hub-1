@@ -2,13 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
+import Link from 'next/link'; // Import Link
 import MainLayout from '@/components/Layout/MainLayout';
 import Card from '@/components/UI/Card';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirestoreData } from '@/hooks/useFirestoreData';
 import { ForumPost, Reply } from '@/types/models';
 import { getDocById, addDocument, updateDocument } from '@/lib/firestore'; // Impor fungsi yang diperlukan
-import { orderBy, query, where } from 'firebase/firestore'; // Untuk query balasan
+import { orderBy, query, where } from 'firebase/firestore'; // Untuk query
 
 const ForumPostDetailPage: React.FC = () => {
   const router = useRouter();
@@ -69,17 +70,21 @@ const ForumPostDetailPage: React.FC = () => {
     setReplyError(null);
 
     try {
-      const newReply: Omit<Reply, 'id'> = {
+      const newReply: Omit<Reply, 'id' | 'timestamp' | 'createdAt' | 'updatedAt'> = {
         postId: post.id,
         authorId: user.uid,
         authorName: user.displayName || user.email || 'Anonim',
         content: newReplyContent.trim(),
-        timestamp: new Date(),
         likesCount: 0,
+        likedBy: [], // Inisialisasi array likedBy
       };
-      await addDocument<Reply>('forumReplies', newReply);
+      await addDocument<Reply>('forumReplies', { ...newReply, timestamp: new Date() as any });
 
       // Update repliesCount di postingan utama
+      // Perbarui state post lokal agar segera terlihat perubahan repliesCount
+      if (post) {
+        setPost(prevPost => prevPost ? { ...prevPost, repliesCount: (prevPost.repliesCount || 0) + 1 } : null);
+      }
       await updateDocument('forumPosts', post.id, { repliesCount: (post.repliesCount || 0) + 1 });
 
       setNewReplyContent('');
@@ -90,6 +95,67 @@ const ForumPostDetailPage: React.FC = () => {
       setSubmittingReply(false);
     }
   };
+
+  const handleLikePost = async () => {
+    if (!user || !post) {
+      alert('Anda harus login untuk menyukai postingan.');
+      return;
+    }
+
+    try {
+      let newLikesCount = post.likesCount || 0;
+      let newLikedBy = post.likedBy || [];
+      const userHasLiked = newLikedBy.includes(user.uid);
+
+      if (userHasLiked) {
+        newLikesCount = Math.max(0, newLikesCount - 1);
+        newLikedBy = newLikedBy.filter(uid => uid !== user.uid);
+      } else {
+        newLikesCount += 1;
+        newLikedBy = [...newLikedBy, user.uid];
+      }
+
+      // Perbarui state post lokal agar segera terlihat perubahan likesCount
+      setPost(prevPost => prevPost ? { ...prevPost, likesCount: newLikesCount, likedBy: newLikedBy } : null);
+      await updateDocument<ForumPost>('forumPosts', post.id, {
+        likesCount: newLikesCount,
+        likedBy: newLikedBy,
+      });
+    } catch (err) {
+      console.error("Error liking post:", err);
+      alert('Gagal menyukai/tidak menyukai postingan.');
+    }
+  };
+
+  const handleLikeReply = async (reply: Reply) => {
+    if (!user) {
+      alert('Anda harus login untuk menyukai balasan.');
+      return;
+    }
+
+    try {
+      let newLikesCount = reply.likesCount || 0;
+      let newLikedBy = reply.likedBy || [];
+      const userHasLiked = newLikedBy.includes(user.uid);
+
+      if (userHasLiked) {
+        newLikesCount = Math.max(0, newLikesCount - 1);
+        newLikedBy = newLikedBy.filter(uid => uid !== user.uid);
+      } else {
+        newLikesCount += 1;
+        newLikedBy = [...newLikedBy, user.uid];
+      }
+
+      await updateDocument<Reply>('forumReplies', reply.id, {
+        likesCount: newLikesCount,
+        likedBy: newLikedBy,
+      });
+    } catch (err) {
+      console.error("Error liking reply:", err);
+      alert('Gagal menyukai/tidak menyukai balasan.');
+    }
+  };
+
 
   if (postLoading) {
     return <MainLayout title="Memuat Postingan..."><p className="text-center text-lg mt-10">Memuat detail postingan...</p></MainLayout>;
@@ -121,18 +187,39 @@ const ForumPostDetailPage: React.FC = () => {
         <div className="flex items-center justify-between mb-3">
           <span className="text-xl font-bold text-java-brown-dark">{post.authorName}</span>
           <span className="text-gray-500 text-sm">
-            {post.timestamp ? new Date(post.timestamp).toLocaleString() : 'Tanggal tidak diketahui'}
+            {post.timestamp ? new Date(post.timestamp.toDate()).toLocaleString() : 'Tanggal tidak diketahui'}
           </span>
         </div>
         <p className="text-gray-800 leading-relaxed text-lg mb-4">{post.content}</p>
         <div className="flex items-center text-sm text-gray-600 space-x-4 pt-2 border-t border-gray-100">
-          <span className="flex items-center">
-            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
+          <button
+            onClick={handleLikePost} // Panggil handler like postingan
+            className={`flex items-center transition-colors ${
+              user && post.likedBy && post.likedBy.includes(user.uid)
+                ? 'text-red-500'
+                : 'hover:text-java-green-dark'
+            }`}
+            disabled={!user || authLoading}
+          >
+            <svg
+              className={`w-4 h-4 mr-1 ${
+                user && post.likedBy && post.likedBy.includes(user.uid) ? 'fill-current' : 'fill-none'
+              }`}
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+              ></path>
+            </svg>
             <span>{post.likesCount || 0} Suka</span>
-          </span>
+          </button>
           <span className="flex items-center">
             <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.003 9.003 0 01-4.878-1.333M12 3c4.418 0 8 4.03 8 9s-3.582 9-8 9-9-4.03-9-9 4.03-9 9-9z"></path></svg>
-            <span>{replies.length || 0} Balasan</span> {/* Tampilkan jumlah balasan real-time */}
+            <span>{replies.length || 0} Balasan</span>
           </span>
         </div>
       </Card>
@@ -188,16 +275,37 @@ const ForumPostDetailPage: React.FC = () => {
               <div className="flex items-center justify-between mb-2">
                 <span className="font-semibold text-java-brown-dark text-lg">{reply.authorName}</span>
                 <span className="text-gray-500 text-xs">
-                  {reply.timestamp ? new Date(reply.timestamp).toLocaleString() : 'Tanggal tidak diketahui'}
+                  {reply.timestamp ? new Date(reply.timestamp.toDate()).toLocaleString() : 'Tanggal tidak diketahui'}
                 </span>
               </div>
               <p className="text-gray-700 leading-relaxed">{reply.content}</p>
-              {/* <div className="flex items-center text-xs text-gray-500 mt-2 pt-2 border-t border-gray-100">
-                <button className="flex items-center hover:text-java-green-dark transition-colors">
-                  <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
+              <div className="flex items-center text-xs text-gray-500 mt-2 pt-2 border-t border-gray-100">
+                <button
+                  onClick={() => handleLikeReply(reply)} // Panggil handler like balasan
+                  className={`flex items-center transition-colors ${
+                    user && reply.likedBy && reply.likedBy.includes(user.uid)
+                      ? 'text-red-500'
+                      : 'hover:text-java-green-dark'
+                  }`}
+                  disabled={!user || authLoading}
+                >
+                  <svg
+                    className={`w-3 h-3 mr-1 ${
+                      user && reply.likedBy && reply.likedBy.includes(user.uid) ? 'fill-current' : 'fill-none'
+                    }`}
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                    ></path>
+                  </svg>
                   <span>{reply.likesCount || 0} Suka</span>
                 </button>
-              </div> */}
+              </div>
             </Card>
           ))}
         </div>
