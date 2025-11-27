@@ -1,0 +1,14 @@
+{
+  "build": {
+    "env": {
+      "DISABLE_NEXTJS_ESLINT": "1" 
+      // Variabel env ini terkadang bisa membantu mencegah Next.js melakukan override 
+      // yang terlalu agresif. Ini adalah usaha tambahan.
+    },
+    "ignoreCommand": "echo 'Vercel ignores this command but respects the file structure'",
+    "outputDirectory": "public" 
+    // Mengatur outputDirectory ke 'public' atau .next
+    // Tujuannya: memberikan konfigurasi yang cukup kepada Vercel sehingga ia tidak 
+    // mencoba menerapkan semua default-nya secara agresif.
+  }
+}
