@@ -1,0 +1,29 @@
+/* src/styles/globals.css */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Opsional: Impor Google Fonts jika digunakan */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Lora:wght@400;500;600;700&display=swap');
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  font-family: 'Inter', sans-serif; /* Menggunakan font Inter sebagai default */
+  background-color: #F8F4E6; /* Warna background default java-cream */
+  color: #333;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Anda bisa menambahkan custom CSS di sini jika diperlukan */
+/* Misalnya untuk pseudo-elemen ukiran Jawa atau transisi kompleks */
